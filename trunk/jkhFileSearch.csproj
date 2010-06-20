@@ -46,12 +46,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\Common\CustomSettings.cs">
-      <Link>Common\CustomSettings.cs</Link>
-    </Compile>
-    <Compile Include="..\Common\QuickLog.cs">
-      <Link>Common\QuickLog.cs</Link>
-    </Compile>
+    <Compile Include="Common\CustomSettings.cs" />
+    <Compile Include="Common\QuickLog.cs" />
     <Compile Include="FileTypeIconManager.cs" />
     <Compile Include="FormMain.cs">
       <SubType>Form</SubType>
