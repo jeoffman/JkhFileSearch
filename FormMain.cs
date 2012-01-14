@@ -22,7 +22,8 @@ using ListView_SortManager;
 //using jkhIContextMenu;
 
 using CustomSettingsXML;
-using QuickLogging;	//CustomSettings
+using QuickLogging;
+using Microsoft.VisualBasic.Devices;	//CustomSettings
 
 // [assembly: SecurityPermission(SecurityAction.RequestMinimum, Execution = true)]
 // [assembly: PermissionSet(SecurityAction.RequestOptional, Name = "Nothing")]
@@ -95,6 +96,7 @@ namespace jkhFileSearch
 			this.AcceptButton = buttonStart;
 
 			listFiles.SmallImageList = _ftim.SmallImageList;
+			listFiles.LargeImageList = _ftim.LargeImageList;
 
 			/*ColumnHeader headerFileName =*/ listFiles.Columns.Add("File Name");
 			/*ColumnHeader headerPath =*/ listFiles.Columns.Add("Path");
@@ -116,6 +118,7 @@ namespace jkhFileSearch
 			splitContainer.SplitterDistance = settings.GetSetting("SplitterDistance", 120);
 			checkIncludeSubdirs.Checked = settings.GetSetting("IncludeSubdirs", true);
 			checkBoxRegularExpressionFileName.Checked = settings.GetSetting("RegularExpressionFileName", true);
+			comboBoxResultView.SelectedIndex = settings.GetSetting("ResultView", 4);
 
 			string[] fileNames = settings.GetSetting("comboFileNames", new string[0]);
 			comboFileName.Items.AddRange(fileNames);
@@ -172,6 +175,7 @@ namespace jkhFileSearch
 				settings.PutSetting("lookIn", comboLookIn.Text);
 				settings.PutSetting("IncludeSubdirs", checkIncludeSubdirs.Checked);
 				settings.PutSetting("RegularExpressionFileName", checkBoxRegularExpressionFileName.Checked);
+				settings.PutSetting("ResultView", comboBoxResultView.SelectedIndex);
 
 				// trim list of fileNames so it is manageable
 				while(comboFileName.Items.Count > _maxComboSize)
@@ -359,6 +363,11 @@ namespace jkhFileSearch
 
 				try
 				{
+					toolStripSplitButtonLogPopUp.Image = jkhFileSearch.Properties.Resources.LogPopUpGood;	//reset the pop-up log indicator
+					toolStripButtonLogging.Image = jkhFileSearch.Properties.Resources.LogPopUpGood;
+
+					AddPopUpMessage("Searching: " + comboLookIn.Text, Color.DarkGreen);
+
 					_bwSearcher = new BackgroundWorker();
 					_bwSearcher.WorkerSupportsCancellation = true;
 					_bwSearcher.DoWork += SearchAsync;
@@ -491,7 +500,15 @@ namespace jkhFileSearch
 										{
 											if(line.IndexOf(sp.containingText, StringComparison.CurrentCultureIgnoreCase) >= 0)
 											{
-												AddFile(sp, fi);
+												try
+												{
+													AddFile(sp, fi);
+												}
+												catch(Exception exc)
+												{
+													AddPopUpMessage("Exception adding \"" + fi.FullName + "\":" + exc.Message, Color.DarkRed);
+													Exception copy = exc;
+												}
 												break;
 											}
 											if(!_bwSearcher.CancellationPending)
@@ -503,14 +520,15 @@ namespace jkhFileSearch
 							}
 						}
 					}
-					catch(UnauthorizedAccessException /*exc*/)
+					catch(UnauthorizedAccessException exc)
 					{
-						//eat it for now, should show a nice (non-obtrusive) pop-up error thingy
+						AddPopUpMessage("UnauthorizedAccessException in SearchFolder: " + exc.Message, Color.DarkRed);
 					}
 					catch(Exception exc)
 					{
-						if(MessageBox.Show("Exception in SearchFolder: " + exc.Message, "Exception processing folder", MessageBoxButtons.OKCancel) == DialogResult.Cancel)
-							_bwSearcher.CancelAsync();
+						AddPopUpMessage("Exception in SearchFolder: " + exc.Message, Color.DarkRed);
+// 						if(MessageBox.Show("Exception in SearchFolder: " + exc.Message, "Exception processing folder", MessageBoxButtons.OKCancel) == DialogResult.Cancel)
+// 							_bwSearcher.CancelAsync();
 					}
 
 					if(sp.recurseSubdirs && !_bwSearcher.CancellationPending)
@@ -527,24 +545,27 @@ namespace jkhFileSearch
 								{
 									SearchFolder(sub.FullName, sp);
 								}
-								catch(UnauthorizedAccessException /*exc*/)
+								catch(UnauthorizedAccessException exc)
 								{
+									AddPopUpMessage("UnauthorizedAccessException in SearchFolder for Directories: " + exc.Message, Color.DarkRed);
 								}
 								catch(Exception exc)
 								{
-									if(MessageBox.Show("Exception in SearchFolder for Directories: " + exc.Message, "Exception processing folder", MessageBoxButtons.OKCancel) == DialogResult.Cancel)
-										_bwSearcher.CancelAsync();
+									AddPopUpMessage("Exception in SearchFolder for Directories: " + exc.Message, Color.DarkRed);
+// 									if(MessageBox.Show("Exception in SearchFolder for Directories: " + exc.Message, "Exception processing folder", MessageBoxButtons.OKCancel) == DialogResult.Cancel)
+// 										_bwSearcher.CancelAsync();
 								}
 							}
 						}
-						catch(UnauthorizedAccessException /*exc*/)
+						catch(UnauthorizedAccessException exc)
 						{
-							//eat it for now, should show a nice (non-obtrusive) pop-up error thingy
+							AddPopUpMessage("UnauthorizedAccessException after GetDirectories: " + exc.Message, Color.DarkRed);
 						}
 						catch(Exception exc)
 						{
-							if(MessageBox.Show("Exception after GetDirectories: " + exc.Message, "Exception processing Directories", MessageBoxButtons.OKCancel) == DialogResult.Cancel)
-								_bwSearcher.CancelAsync();
+							AddPopUpMessage("Exception after GetDirectories: " + exc.Message, Color.DarkRed);
+// 							if(MessageBox.Show("Exception after GetDirectories: " + exc.Message, "Exception processing Directories", MessageBoxButtons.OKCancel) == DialogResult.Cancel)
+// 								_bwSearcher.CancelAsync();
 						}
 					}
 				}
@@ -747,11 +768,17 @@ namespace jkhFileSearch
 			{
 				if(e.Button == MouseButtons.Right)
 				{
-					string path = Path.Combine(lvi.SubItems[1].Text, lvi.SubItems[0].Text);
 					IShellFolder desktopFolder = null;
-					IShellFolder folder = null;
-					IntPtr folderPidl = IntPtr.Zero;
-					IntPtr filePidl = IntPtr.Zero;
+					IShellFolder[] folders = new IShellFolder[listFiles.SelectedItems.Count];
+					IntPtr[] folderPidls = new IntPtr[listFiles.SelectedItems.Count];
+					IntPtr[] filePidls = new IntPtr[listFiles.SelectedItems.Count];
+
+					for(int countItems = 0; countItems < listFiles.SelectedItems.Count; countItems++)
+					{
+						filePidls[countItems] = IntPtr.Zero;
+						folderPidls[countItems] = IntPtr.Zero;
+						folders[countItems] = null;
+					}
 
 					try
 					{
@@ -762,25 +789,31 @@ namespace jkhFileSearch
 						// Get a reference to the desktop folder object.
 						Shell32Methods.SHGetDesktopFolder(out desktopFolder);
 
-						// Get the PIDL for the file's folder.
-						hr = desktopFolder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetDirectoryName(path), ref pchEaten, out folderPidl, out attr);
-						if(hr != 0)
-							Marshal.ThrowExceptionForHR(hr);
+						// Build an ARRAY of filePidl for each selected item
+						for(int countSelections = 0; countSelections < listFiles.SelectedItems.Count; countSelections++)
+						{
+							string path = Path.Combine(listFiles.SelectedItems[countSelections].SubItems[1].Text, listFiles.SelectedItems[countSelections].SubItems[0].Text);
 
-						// Get a reference to the file's folder object.
-						hr = desktopFolder.BindToObject(folderPidl, IntPtr.Zero, ref Shell32Methods.IID_IShellFolder, ref folder);
-						if(hr != 0)
-							Marshal.ThrowExceptionForHR(hr);
+							// Get the PIDL for the file's folder.
+							hr = desktopFolder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetDirectoryName(path), ref pchEaten, out folderPidls[countSelections], out attr);
+							if(hr != 0)
+								Marshal.ThrowExceptionForHR(hr);
 
-						// Get the PIDL for the file - relative to the parent folder.
-						hr = folder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetFileName(path), ref pchEaten, out filePidl, out attr);
-						if(hr != 0)
-							Marshal.ThrowExceptionForHR(hr);
+							// Get a reference to the file's folder object.
+							hr = desktopFolder.BindToObject(folderPidls[countSelections], IntPtr.Zero, ref Shell32Methods.IID_IShellFolder, ref folders[countSelections]);
+							if(hr != 0)
+								Marshal.ThrowExceptionForHR(hr);
 
+							// Get the PIDL for the file - relative to the parent folder.
+							hr = folders[countSelections].ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetFileName(path), ref pchEaten, out filePidls[countSelections], out attr);
+							if(hr != 0)
+								Marshal.ThrowExceptionForHR(hr);
+						}
+						
 						int reserved = 0;
 						IUnknown unk = null;
-						// Get the IExtractImage interface associated with the file object.
-						hr = folder.GetUIObjectOf(IntPtr.Zero, 1, ref filePidl, ref Shell32Methods.IID_IContextMenu, ref reserved, out unk);
+						// Get the IID_IContextMenu interface associated with the file object.
+						hr = folders[0].GetUIObjectOf(IntPtr.Zero, filePidls.Length, filePidls, ref Shell32Methods.IID_IContextMenu, reserved, out unk);
 						if(hr != 0)
 							Marshal.ThrowExceptionForHR(hr);
 
@@ -797,6 +830,9 @@ namespace jkhFileSearch
 						{
 							if(menuResult == 57575)
 							{
+								// just the path of the item under the mouse!
+								string path = Path.Combine(lvi.SubItems[1].Text, lvi.SubItems[0].Text);
+
 								System.Diagnostics.Process p = new System.Diagnostics.Process();
 								p.StartInfo.FileName = "explorer.exe";
 								p.StartInfo.Arguments = "/e,/select," + path;
@@ -844,12 +880,20 @@ namespace jkhFileSearch
 					}
 					finally
 					{
-						if(filePidl != IntPtr.Zero)
-							Marshal.FreeCoTaskMem(filePidl);
-						if(folderPidl != IntPtr.Zero)
-							Marshal.FreeCoTaskMem(folderPidl);
-						if(folder != null)
-							Marshal.ReleaseComObject(folder);
+						foreach(IntPtr intptr in filePidls)
+							if(intptr != IntPtr.Zero)
+								Marshal.FreeCoTaskMem(intptr);
+
+						foreach(IntPtr intptr in folderPidls)
+							if(intptr != IntPtr.Zero)
+								Marshal.FreeCoTaskMem(intptr);
+
+						foreach(IShellFolder fldr in folders)
+						{
+							if(fldr != null)
+								Marshal.ReleaseComObject(fldr);
+						}
+
 						if(desktopFolder != null)
 							Marshal.ReleaseComObject(desktopFolder);
 					}
@@ -1014,6 +1058,8 @@ namespace jkhFileSearch
 					lineCount++;
 					if(line.IndexOf(lookFor, StringComparison.CurrentCultureIgnoreCase) >= 0)
 					{
+						if(line.Length > 1024)
+							line = line.Substring(0, 1024);
 						string newLineText = string.Format("{0}. {1}\n", lineCount, line);
 #if USE_BEGIN_INVOKE_JEOFF
 						// trying to fix that deadlock issue with the GUI thread
@@ -1149,6 +1195,131 @@ namespace jkhFileSearch
 				if(!string.IsNullOrEmpty(statusInfo))
 					MessageBox.Show(statusInfo);
 			}
+		}
+
+		private void comboBoxResultView_SelectedIndexChanged(object sender, EventArgs e)
+		{
+			switch(comboBoxResultView.SelectedIndex)
+			{
+				case 0:	//Large Icons
+					listFiles.View = View.LargeIcon;
+					break;
+				case 1:	//Small Icons
+					listFiles.View = View.SmallIcon;
+					break;
+				case 2:	//List
+					listFiles.View = View.List;
+					break;
+				case 3:	//Tile
+					listFiles.View = View.Tile;
+					break;
+				case 4://Details
+					listFiles.View = View.Details;
+					break;
+			}
+		}
+
+		private void AddPopUpMessage(string text, Color color)
+		{
+			if(!string.IsNullOrEmpty(text))
+			{
+				if(InvokeRequired)
+				{
+					Invoke(new MethodInvoker(delegate() { AddPopUpMessage(text, color); }));
+				}
+				else
+				{
+					if(!text.EndsWith("\n"))
+						text += "\n";
+					richTextBoxPopUp.SuspendLayout();
+					int originalTextEnd = richTextBoxPopUp.Text.Length;
+					richTextBoxPopUp.AppendText(text);
+					richTextBoxPopUp.Select(originalTextEnd, text.Length);
+					richTextBoxPopUp.SelectionColor = color;
+					richTextBoxPopUp.SelectionLength = 0;
+					richTextBoxPopUp.ScrollToCaret();
+					richTextBoxPopUp.ResumeLayout();
+					richTextBoxPopUp.Update();
+					if(color == Color.DarkRed && toolStripSplitButtonLogPopUp.Image != jkhFileSearch.Properties.Resources.LogPopUpBad)
+						toolStripSplitButtonLogPopUp.Image = jkhFileSearch.Properties.Resources.LogPopUpBad;
+					if(color == Color.DarkRed && toolStripButtonLogging.Image != jkhFileSearch.Properties.Resources.LogPopUpBad)
+						toolStripButtonLogging.Image = jkhFileSearch.Properties.Resources.LogPopUpBad;
+				}
+			}
+		}
+
+		private void toolStripSplitButtonLogPopUp_ButtonClick(object sender, EventArgs e)
+		{
+			if(richTextBoxPopUp.Visible)
+				richTextBoxPopUp.Hide();
+			else
+				richTextBoxPopUp.Show();
+		}
+
+		private void richTextBoxPopUp_MouseMove(object sender, MouseEventArgs e)
+		{
+			if(_tracking)
+			{
+				Debug.WriteLine(string.Format("++{0},{1}", e.Location.X, e.Location.Y));
+
+// 				richTextBoxPopUp.Height = richTextBoxPopUp.Top + e.Y;
+// 				richTextBoxPopUp.Width = richTextBoxPopUp.Top + e.X;
+
+				Size sizeTemp = new Size((Point)richTextBoxPopUp.Size);
+				sizeTemp.Width -= e.Location.X;
+				sizeTemp.Height -= e.Location.Y;
+				richTextBoxPopUp.Size = sizeTemp;
+
+				Point locTemp = new Point(richTextBoxPopUp.Location.X, richTextBoxPopUp.Location.Y);
+				locTemp.X += e.Location.X;
+				locTemp.Y += e.Location.Y;
+				richTextBoxPopUp.Location = locTemp;
+			}
+			else
+			{
+				if(e.Location.X <= 4 && e.Location.Y <= 4)
+				{
+					Cursor = Cursors.SizeNWSE;
+				}
+				else
+				{
+					Cursor = Cursors.Default;
+					Debug.WriteLine(string.Format("{0},{1}", e.Location.X, e.Location.Y));
+				}
+			}
+		}
+
+		bool _tracking = false;
+		private void richTextBoxPopUp_MouseDown(object sender, MouseEventArgs e)
+		{
+			if(e.Button == MouseButtons.Left)
+			{
+				if(e.Location.X <= 4 && e.Location.Y <= 4)
+				{
+					richTextBoxPopUp.Capture = true;
+					Cursor = Cursors.SizeNWSE;
+					_tracking = true;
+				}				
+			}
+			else
+			{
+				Cursor = Cursors.Default;
+				Debug.WriteLine(string.Format("{0},{1}", e.Location.X, e.Location.Y));
+			}
+
+		}
+
+		private void richTextBoxPopUp_MouseUp(object sender, MouseEventArgs e)
+		{
+			_tracking = false;
+		}
+
+		private void toolStripButtonLogging_Click(object sender, EventArgs e)
+		{
+			if(richTextBoxPopUp.Visible)
+				richTextBoxPopUp.Hide();
+			else
+				richTextBoxPopUp.Show();
 		}
 	}
 }

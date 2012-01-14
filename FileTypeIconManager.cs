@@ -4,7 +4,8 @@ using System.Collections;	//Hashtable
 
 using System.IO;	//Path
 using System.Runtime.InteropServices;	//MarshalAs
-using System.Windows.Forms;	//ImageList
+using System.Windows.Forms;
+using System.Drawing;	//ImageList
 
 namespace jkhFileSearch
 {
@@ -42,19 +43,30 @@ namespace jkhFileSearch
 	{
 		private Hashtable _fileTypeIndecies = new Hashtable(StringComparer.CurrentCultureIgnoreCase);
 		private const string _SECRET_MAGICAL_DIRECTORY_STRING = "!@#$MAGICALDIRECTORYSTRING%^&*()";
-		ImageList il = new ImageList();
+		ImageList _smallImageList = new ImageList();
+		ImageList _largeImageList = new ImageList();
 
 		public ImageList SmallImageList
 		{
 			get
 			{
-				return il;
+				return _smallImageList;
+			}
+		}
+
+		public ImageList LargeImageList
+		{
+			get
+			{
+				return _largeImageList;
 			}
 		}
 
 		public void Clear()
 		{
-			il.Images.Clear();
+			_smallImageList.Images.Clear();
+			_largeImageList.Images.Clear();
+			_largeImageList.ImageSize = new System.Drawing.Size(32, 32);
 			_fileTypeIndecies.Clear();
 		}
 
@@ -67,9 +79,37 @@ namespace jkhFileSearch
 				SHFILEINFO shinfo = new SHFILEINFO();
 				/*IntPtr hImgSmall =*/ shell32.SHGetFileInfo(filename, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), shell32.SHGFI_ICON | shell32.SHGFI_SMALLICON);
 				System.Drawing.Icon tmp = System.Drawing.Icon.FromHandle(shinfo.hIcon);
-				il.Images.Add(tmp);
-				retval = il.Images.Count - 1;
+				_smallImageList.Images.Add(tmp);
+				shell32.SHGetFileInfo(filename, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), shell32.SHGFI_ICON | shell32.SHGFI_LARGEICON);
+				tmp = System.Drawing.Icon.FromHandle(shinfo.hIcon);
+				_largeImageList.Images.Add(tmp);
+
+				retval = _smallImageList.Images.Count - 1;
 				_fileTypeIndecies.Add(filename, retval);
+			}
+			else if(ext.Equals(".jpg", StringComparison.CurrentCultureIgnoreCase) ||
+					ext.Equals(".png", StringComparison.CurrentCultureIgnoreCase) ||
+					ext.Equals(".bmp", StringComparison.CurrentCultureIgnoreCase) ||
+					ext.Equals(".gif", StringComparison.CurrentCultureIgnoreCase))
+			{
+				using(System.Drawing.Image image = System.Drawing.Image.FromFile(filename))
+				{
+					_smallImageList.Images.Add(image.GetThumbnailImage(16, 16, new System.Drawing.Image.GetThumbnailImageAbort(GetThumbnailImageAbort), IntPtr.Zero));
+					_largeImageList.Images.Add(image.GetThumbnailImage(32, 32, new System.Drawing.Image.GetThumbnailImageAbort(GetThumbnailImageAbort), IntPtr.Zero));
+					retval = _smallImageList.Images.Count - 1;
+					_fileTypeIndecies.Add(filename, retval);
+				}
+			}
+			else if(ext.Equals(".ico", StringComparison.CurrentCultureIgnoreCase))
+			{
+				using(Icon ico = new Icon(filename))
+				{
+					Image img = ico.ToBitmap();
+					_smallImageList.Images.Add(img.GetThumbnailImage(16, 16, new System.Drawing.Image.GetThumbnailImageAbort(GetThumbnailImageAbort), IntPtr.Zero));
+					_largeImageList.Images.Add(img.GetThumbnailImage(32, 32, new System.Drawing.Image.GetThumbnailImageAbort(GetThumbnailImageAbort), IntPtr.Zero));
+					retval = _smallImageList.Images.Count - 1;
+					_fileTypeIndecies.Add(filename, retval);
+				}
 			}
 			else
 			{
@@ -78,8 +118,11 @@ namespace jkhFileSearch
 					SHFILEINFO shinfo = new SHFILEINFO();
 					/*IntPtr hImgSmall =*/ shell32.SHGetFileInfo(ext, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), shell32.SHGFI_ICON | shell32.SHGFI_SMALLICON | shell32.SHGFI_USEFILEATTRIBUTES);
 					System.Drawing.Icon tmp = System.Drawing.Icon.FromHandle(shinfo.hIcon);
-					il.Images.Add(tmp);
-					retval = il.Images.Count - 1;
+					_smallImageList.Images.Add(tmp);
+					shell32.SHGetFileInfo(ext, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), shell32.SHGFI_ICON | shell32.SHGFI_LARGEICON | shell32.SHGFI_USEFILEATTRIBUTES);
+					tmp = System.Drawing.Icon.FromHandle(shinfo.hIcon);
+					_largeImageList.Images.Add(tmp);
+					retval = _smallImageList.Images.Count - 1;
 					_fileTypeIndecies.Add(ext, retval);
 				}
 				else
@@ -88,6 +131,11 @@ namespace jkhFileSearch
 				}
 			}
 			return retval;
+		}
+
+		static public bool GetThumbnailImageAbort()
+		{
+			return false;
 		}
 
 		public int GetIconIndexDir(string filename)
@@ -99,8 +147,11 @@ namespace jkhFileSearch
 				SHFILEINFO shinfo = new SHFILEINFO();
 				/*IntPtr hImgSmall =*/ shell32.SHGetFileInfo(filename, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), shell32.SHGFI_ICON | shell32.SHGFI_SMALLICON);
 				System.Drawing.Icon tmp = System.Drawing.Icon.FromHandle(shinfo.hIcon);
-				il.Images.Add(tmp);
-				retval = il.Images.Count - 1;
+				_smallImageList.Images.Add(tmp);
+				shell32.SHGetFileInfo(filename, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), shell32.SHGFI_ICON | shell32.SHGFI_LARGEICON);
+				tmp = System.Drawing.Icon.FromHandle(shinfo.hIcon);
+				_largeImageList.Images.Add(tmp);
+				retval = _smallImageList.Images.Count - 1;
 				_fileTypeIndecies.Add(_SECRET_MAGICAL_DIRECTORY_STRING, retval);
 			}
 			else
