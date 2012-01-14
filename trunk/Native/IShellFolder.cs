@@ -99,7 +99,7 @@ namespace shell32
 		[PreserveSig]
 		int GetAttributesOf(int cidl, IntPtr apidl, [MarshalAs(UnmanagedType.U4)] ref SFGAO rgfInOut);
 		[PreserveSig]
-		int GetUIObjectOf(IntPtr hwndOwner, int cidl, ref IntPtr apidl, ref Guid riid, ref int prgfInOut, out IUnknown ppvOut);
+		int GetUIObjectOf(IntPtr hwndOwner, int cidl, [MarshalAs(UnmanagedType.LPArray)] IntPtr[] apidl, ref Guid riid, int prgfInOut, out IUnknown ppvOut);
 		[PreserveSig]
 		int GetDisplayNameOf(IntPtr pidl, [MarshalAs(UnmanagedType.U4)] SHGDN uFlags, ref STRRET lpName);
 		[PreserveSig]
