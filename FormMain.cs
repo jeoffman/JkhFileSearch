@@ -1,17 +1,19 @@
-using System;	//EventArgs
-using System.ComponentModel;	//ThreadPool
-using System.Diagnostics;	//Debug
-using System.Drawing;	//Color
-using System.Globalization;	//CultureInfo
-using System.IO;	//DirectoryInfo
-using System.Runtime.InteropServices;	//Marshall
-using System.Security.Permissions;	//SecurityPermission,PermissionSet
-using System.Text;	//StringBuilder
-using System.Text.RegularExpressions;	//Regex
-using System.Windows.Forms;	//Form
-using System.Collections.Specialized;	//StringCollection
+using System;   //EventArgs
+using System.Collections.Specialized;
+using System.ComponentModel;    //ThreadPool
+using System.Diagnostics;   //Debug
+using System.Drawing;   //Color
+using System.Globalization; //CultureInfo
+using System.IO;    //DirectoryInfo
+using System.Runtime.InteropServices;   //Marshall
+using System.Security.Permissions;  //SecurityPermission,PermissionSet
+using System.Text;  //StringBuilder
+using System.Text.RegularExpressions;   //Regex
+using System.Threading;
+using System.Windows.Forms;
 
-using Microsoft.VisualBasic.FileIO;	//FileSystem
+using Microsoft.VisualBasic.FileIO; //FileSystem
+using Microsoft.VisualBasic.Devices;
 
 // using ShellDll;
 // using CG.Core;
@@ -19,11 +21,11 @@ using Microsoft.VisualBasic.FileIO;	//FileSystem
 using shell32;
 using user32;
 using ListView_SortManager;
+using JkhSettings;
 //using jkhIContextMenu;
 
-using CustomSettingsXML;
-using QuickLogging;
-using Microsoft.VisualBasic.Devices;	//CustomSettings
+//using CustomSettingsXML;
+
 
 // [assembly: SecurityPermission(SecurityAction.RequestMinimum, Execution = true)]
 // [assembly: PermissionSet(SecurityAction.RequestOptional, Name = "Nothing")]
@@ -32,11 +34,12 @@ using Microsoft.VisualBasic.Devices;	//CustomSettings
 // [assembly: SecurityPermission(SecurityAction.RequestRefuse, UnmanagedCode = true)]
 // [assembly: FileIOPermission(SecurityAction.RequestOptional, Unrestricted = true)]
 
-[assembly: FileIOPermission(SecurityAction.RequestMinimum, Unrestricted = true)]
 namespace jkhFileSearch
 {
 	public partial class FormMain : Form
 	{
+		private readonly static TraceSource _traceSource = new TraceSource("JkhFileSearch", SourceLevels.Error);
+
 		public class FlickerFreeListView : ListView
 		{
 			public FlickerFreeListView() : base()
@@ -82,6 +85,7 @@ namespace jkhFileSearch
 		private bool _closePending;// = false;
 		private const int _maxComboSize = 10;
 		ColumnHeader _headerModified;
+		FormLog _formLogging;
 
 		public FormMain()
 		{
@@ -94,6 +98,9 @@ namespace jkhFileSearch
 			//global::jkhFileSearch.Properties.Settings.Default.Reload();
 
 			this.AcceptButton = buttonStart;
+
+			_formLogging = new FormLog();
+			_formLogging.Show(this);
 
 			listFiles.SmallImageList = _ftim.SmallImageList;
 			listFiles.LargeImageList = _ftim.LargeImageList;
@@ -112,51 +119,53 @@ namespace jkhFileSearch
 											typeof(ListViewDateSort)	};
 			_sortManager = new ListViewSortManager(listFiles, sortTypes, -1, System.Windows.Forms.SortOrder.Ascending);  // Sort descending by second column
 
-			CustomSettings settings = new CustomSettings();
-
-			settings.RestoreColumnWidths(listFiles);
-			splitContainer.SplitterDistance = settings.GetSetting("SplitterDistance", 120);
-			checkIncludeSubdirs.Checked = settings.GetSetting("IncludeSubdirs", true);
-			checkBoxRegularExpressionFileName.Checked = settings.GetSetting("RegularExpressionFileName", true);
-			comboBoxResultView.SelectedIndex = settings.GetSetting("ResultView", 4);
-
-			string[] fileNames = settings.GetSetting("comboFileNames", new string[0]);
-			comboFileName.Items.AddRange(fileNames);
-
-			string[] containingTexts = settings.GetSetting("comboContainingText", new string[0]);
-			comboContainingText.Items.AddRange(containingTexts);
-
-			numericUpDownMin.Value = numericUpDownMin.Minimum;
-			numericUpDownMax.Value = numericUpDownMax.Maximum;
-			dateTimePickerMin.Value = dateTimePickerMin.MinDate;
-			dateTimePickerMax.Value = dateTimePickerMax.MaxDate;
-
-			if(Environment.GetCommandLineArgs().Length > 1)
+			using(CustomSettings settings = new CustomSettings())
 			{
-				string path = Environment.GetCommandLineArgs()[1];
-				int beginning = 0;
-				if(path[0] == '\"')
-					beginning = 1;
-				int ending = path.Length;
-				if(path[path.Length - 1] == '\"')
-					ending = path.Length - 1;
-				path = path.Substring(beginning, ending);
-				if(path[path.Length - 1] != '\\')
-					path += '\\';
-				comboLookIn.Text = Path.GetFullPath(path);
-				comboFileName.Text = "*.*";
+				settings.RestoreColumnWidths(listFiles);
+				splitContainer.SplitterDistance = settings.GetSetting("SplitterDistance", 120);
+				checkIncludeSubdirs.Checked = settings.GetSetting("IncludeSubdirs", true);
+				checkBoxRegularExpressionFileName.Checked = settings.GetSetting("RegularExpressionFileName", true);
+				comboBoxResultView.SelectedIndex = settings.GetSetting("ResultView", 4);
+				_formLogging.Visible = settings.GetSetting("LogFormVisible", false);
+
+				string[] fileNames = settings.GetSetting("comboFileNames", new string[0]);
+				comboFileName.Items.AddRange(fileNames);
+
+				string[] containingTexts = settings.GetSetting("comboContainingText", new string[0]);
+				comboContainingText.Items.AddRange(containingTexts);
+
+				numericUpDownMin.Value = numericUpDownMin.Minimum;
+				numericUpDownMax.Value = numericUpDownMax.Maximum;
+				dateTimePickerMin.Value = dateTimePickerMin.MinDate;
+				dateTimePickerMax.Value = dateTimePickerMax.MaxDate;
+
+				if(Environment.GetCommandLineArgs().Length > 1)
+				{
+					string path = Environment.GetCommandLineArgs()[1];
+					int beginning = 0;
+					if(path[0] == '\"')
+						beginning = 1;
+					int ending = path.Length;
+					if(path[path.Length - 1] == '\"')
+						ending = path.Length - 1;
+					path = path.Substring(beginning, ending);
+					if(path[path.Length - 1] != '\\')
+						path += '\\';
+					comboLookIn.Text = Path.GetFullPath(path);
+					comboFileName.Text = "*.*";
+				}
+				else
+				{
+					comboFileName.Text = settings.GetSetting("filename", "");
+					comboLookIn.Text = settings.GetSetting("lookIn", "");
+				}
+
+				comboBoxDateSearchType.DataSource = Enum.GetValues(typeof(DateSearchType)); 
+
+				timerDurationDisplayUpdate.Tick += new EventHandler(DurationTimerTicks);
+
+				settings.RestoreWindowPlacement(this);
 			}
-			else
-			{
-				comboFileName.Text = settings.GetSetting("filename", "");
-				comboLookIn.Text = settings.GetSetting("lookIn", "");
-			}
-
-			comboBoxDateSearchType.DataSource = Enum.GetValues(typeof(DateSearchType)); 
-
-			timerDurationDisplayUpdate.Tick += new EventHandler(DurationTimerTicks);
-
-			settings.RestoreWindowPlacement(this);
 		}
 
 		private void FormMain_FormClosing(object sender, FormClosingEventArgs e)
@@ -176,6 +185,7 @@ namespace jkhFileSearch
 				settings.PutSetting("IncludeSubdirs", checkIncludeSubdirs.Checked);
 				settings.PutSetting("RegularExpressionFileName", checkBoxRegularExpressionFileName.Checked);
 				settings.PutSetting("ResultView", comboBoxResultView.SelectedIndex);
+				settings.PutSetting("LogFormVisible", _formLogging.Visible);
 
 				// trim list of fileNames so it is manageable
 				while(comboFileName.Items.Count > _maxComboSize)
@@ -253,7 +263,7 @@ namespace jkhFileSearch
 			retval.lookIn = comboLookIn.Text;
 			if(string.IsNullOrEmpty(retval.lookIn) || retval.lookIn[retval.lookIn.Length - 1] != '\\')
 				retval.lookIn += '\\';
-			retval.filename = comboFileName.Text;
+			retval.filename = comboFileName.Text.Trim();
 			if(!checkBoxRegularExpressionFileName.Checked)
 			{
 				if(retval.filename.Length == 0 || retval.filename[0] != '*')
@@ -769,6 +779,8 @@ namespace jkhFileSearch
 				if(e.Button == MouseButtons.Right)
 				{
 					IShellFolder desktopFolder = null;
+					IShellFolder ShellParentFolder = null;	//arbitrarily the first selected item in the list of files
+					IntPtr ParentFolderPIDL = IntPtr.Zero;
 					IShellFolder[] folders = new IShellFolder[listFiles.SelectedItems.Count];
 					IntPtr[] folderPidls = new IntPtr[listFiles.SelectedItems.Count];
 					IntPtr[] filePidls = new IntPtr[listFiles.SelectedItems.Count];
@@ -786,34 +798,66 @@ namespace jkhFileSearch
 						int pchEaten = 0;
 						int hr;
 
+						//NOTE: this guy is a badass - http://www.zabkat.com/blog/08Jul07.htm
+						// SEE - CDefFolderMenu_Create2
+
 						// Get a reference to the desktop folder object.
 						Shell32Methods.SHGetDesktopFolder(out desktopFolder);
 
-						// Build an ARRAY of filePidl for each selected item
-						for(int countSelections = 0; countSelections < listFiles.SelectedItems.Count; countSelections++)
-						{
-							string path = Path.Combine(listFiles.SelectedItems[countSelections].SubItems[1].Text, listFiles.SelectedItems[countSelections].SubItems[0].Text);
+						string path0 = Path.Combine(listFiles.SelectedItems[0].SubItems[1].Text, listFiles.SelectedItems[0].SubItems[0].Text);
+						//string path0 = Path.Combine(listFiles.SelectedItems[0].SubItems[1].Text);
 
-							// Get the PIDL for the file's folder.
-							hr = desktopFolder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetDirectoryName(path), ref pchEaten, out folderPidls[countSelections], out attr);
-							if(hr != 0)
-								Marshal.ThrowExceptionForHR(hr);
+						// Get the PIDL for the "parent"
+						hr = desktopFolder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetDirectoryName(path0), ref pchEaten, out ParentFolderPIDL, out attr);
+						if(hr != 0)
+							Marshal.ThrowExceptionForHR(hr);
 
-							// Get a reference to the file's folder object.
-							hr = desktopFolder.BindToObject(folderPidls[countSelections], IntPtr.Zero, ref Shell32Methods.IID_IShellFolder, ref folders[countSelections]);
-							if(hr != 0)
-								Marshal.ThrowExceptionForHR(hr);
+						// Get a reference to the parent's folder object.
+						hr = desktopFolder.BindToObject(ParentFolderPIDL, IntPtr.Zero, ref Shell32Methods.IID_IShellFolder, ref ShellParentFolder);
+						if(hr != 0)
+							Marshal.ThrowExceptionForHR(hr);
 
-							// Get the PIDL for the file - relative to the parent folder.
-							hr = folders[countSelections].ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetFileName(path), ref pchEaten, out filePidls[countSelections], out attr);
+						if(listFiles.SelectedItems.Count == 1)
+						{	//the easy way...
+							string path = Path.Combine(listFiles.SelectedItems[0].SubItems[1].Text, listFiles.SelectedItems[0].SubItems[0].Text);
+							hr = ShellParentFolder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetFileName(path), ref pchEaten, out filePidls[0], out attr);
 							if(hr != 0)
 								Marshal.ThrowExceptionForHR(hr);
 						}
-						
+						else
+						{	//the HARD way
+							string pathRoot = Path.GetDirectoryName(path0);
+							for(int countSelections = 0; countSelections < listFiles.SelectedItems.Count; countSelections++)
+							{
+								string path = Path.Combine(listFiles.SelectedItems[countSelections].SubItems[1].Text, listFiles.SelectedItems[countSelections].SubItems[0].Text);
+								if(Path.GetDirectoryName(path).Equals(Path.GetDirectoryName(path0), StringComparison.OrdinalIgnoreCase))
+								{
+	//								CDefFolderMenu_Create2 - you have to use this guy for multiple files in different (or sub) directories
+
+									// Get the PIDL for the file - relative to the parent folder.
+									//hr = folders[countSelections].ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetFileName(path), ref pchEaten, out filePidls[countSelections], out attr);
+									//hr = folders[0].ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetFileName(path), ref pchEaten, out filePidls[countSelections], out attr);
+									hr = ShellParentFolder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Path.GetFileName(path), ref pchEaten, out filePidls[countSelections], out attr);
+									if(hr != 0)
+										Marshal.ThrowExceptionForHR(hr);
+								}
+								else
+								{
+									string message = string.Format("File {0} is not in same directory as {1} = NO GO!", path, path0);
+									AddPopUpMessage(message, Color.DarkRed);
+								}
+							}
+						}
+
 						int reserved = 0;
 						IUnknown unk = null;
 						// Get the IID_IContextMenu interface associated with the file object.
-						hr = folders[0].GetUIObjectOf(IntPtr.Zero, filePidls.Length, filePidls, ref Shell32Methods.IID_IContextMenu, reserved, out unk);
+
+						if(folders.Length > 0)
+							Debug.WriteLine("Multi-select, now what?");	// GetUIObjectOf is probably going to blow up in a bit (below)
+
+						//hr = folders[0].GetUIObjectOf(IntPtr.Zero, filePidls.Length, filePidls, ref Shell32Methods.IID_IContextMenu, reserved, out unk);
+						hr = ShellParentFolder.GetUIObjectOf(IntPtr.Zero, filePidls.Length, filePidls, ref Shell32Methods.IID_IContextMenu, reserved, out unk);
 						if(hr != 0)
 							Marshal.ThrowExceptionForHR(hr);
 
@@ -850,6 +894,7 @@ namespace jkhFileSearch
 							else
 							{
 								StringBuilder sb = new StringBuilder(256);
+								cm.GetCommandString(menuResult, GCS.GCS_VERBA, 0, sb, sb.Length);
 								cm.GetCommandString(menuResult, GCS.GCS_VERBW, 0, sb, sb.Length);
 								//byte[] bytes = new byte[256];
 								//cm.GetCommandString(menuResult, GCS.GCS_VERBW, 0, bytes, bytes.Length);
@@ -859,6 +904,8 @@ namespace jkhFileSearch
 								cmici.fMask = 0;
 								cmici.hwnd = this.Handle;
 								cmici.lpVerb = (IntPtr)((menuResult) & 0x0000FFFF);
+								//cmici.lpParameters = selectionParameters.ToString();//null;
+								//cmici.lpParameters = "TEST1";
 								cmici.lpParameters = null;
 								cmici.lpDirectory = null;
 								cmici.nShow = SW.SW_SHOWNORMAL;
@@ -866,6 +913,8 @@ namespace jkhFileSearch
 								cmici.hIcon = IntPtr.Zero;
 								cmici.lpTitle = null;
 								cmici.lpVerbW = (IntPtr)((menuResult) & 0x0000FFFF);
+								//cmici.lpParametersW = selectionParameters.ToString();//null;
+								//cmici.lpParametersW = "TEST2";
 								cmici.lpParametersW = null;
 								cmici.lpDirectoryW = null;
 								cmici.lpTitleW = null;
@@ -893,6 +942,12 @@ namespace jkhFileSearch
 							if(fldr != null)
 								Marshal.ReleaseComObject(fldr);
 						}
+
+						if(ParentFolderPIDL != IntPtr.Zero)
+							Marshal.FreeCoTaskMem(ParentFolderPIDL);
+
+						if(ShellParentFolder != null)
+							Marshal.ReleaseComObject(ShellParentFolder);
 
 						if(desktopFolder != null)
 							Marshal.ReleaseComObject(desktopFolder);
@@ -1077,6 +1132,8 @@ namespace jkhFileSearch
 						//}
 						//this.EndInvoke(result);
 #else
+						if(_bwTextSearcher.CancellationPending)
+							break;
 						AppendLine(newLineText);
 #endif
 					}
@@ -1100,37 +1157,41 @@ namespace jkhFileSearch
 		#endregion Search for Text (Right Pane)
 
 
-		private void listFiles_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
+		private void listFiles_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs lviscea)
 		{
 			if(_bwTextSearcher != null && _bwTextSearcher.IsBusy)
 			{	// the thread is already busy loading text from another file, cancel and QUIT!
 				_bwTextSearcher.CancelAsync();
+				Thread.Sleep(1);
 
 				// Smells like a race condition here! We should wait for the 
 				//	_bwTextSearcher thread to be done before we start the next
 				//	search, but yet it doesn't crash in my experience. When it 
 				//	becomes a real problem then I'll debug it.
 			}
-			richTextBox.Text = "";
+			richTextBox.Text = null;
 
-			string path = Path.Combine(e.Item.SubItems[1].Text, e.Item.SubItems[0].Text);
-			FileInfo fi = new FileInfo(path);
-			StringBuilder fileInfoText = new StringBuilder();
-			fileInfoText.Append(path);
-			fileInfoText.Append(" (");
-			if(fi.Exists)
+			if(lviscea.IsSelected)
 			{
-				fileInfoText.Append(BuildFileSizeText(fi.Length));
-				fileInfoText.Append(", ");
-			}
-			fileInfoText.Append(fi.LastWriteTime.ToShortDateString());
-			fileInfoText.Append(" ");
-			fileInfoText.Append(fi.LastWriteTime.ToShortTimeString());
-			fileInfoText.Append(")\n");
-			AppendText_FontStyle(fileInfoText.ToString(), FontStyle.Bold | FontStyle.Underline);
+				string path = Path.Combine(lviscea.Item.SubItems[1].Text, lviscea.Item.SubItems[0].Text);
+				FileInfo fi = new FileInfo(path);
+				StringBuilder fileInfoText = new StringBuilder();
+				fileInfoText.Append(path);
+				fileInfoText.Append(" (");
+				if(fi.Exists)
+				{
+					fileInfoText.Append(BuildFileSizeText(fi.Length));
+					fileInfoText.Append(", ");
+				}
+				fileInfoText.Append(fi.LastWriteTime.ToShortDateString());
+				fileInfoText.Append(" ");
+				fileInfoText.Append(fi.LastWriteTime.ToShortTimeString());
+				fileInfoText.Append(")\n");
+				AppendText_FontStyle(fileInfoText.ToString(), FontStyle.Bold | FontStyle.Underline);
 
-			if(comboContainingText.Text.Length > 0)
-				StartTextSearch(path);
+				if(comboContainingText.Text.Length > 0)
+					StartTextSearch(path);
+			}
 		}
 
 		private void listFiles_ItemDrag(object sender, ItemDragEventArgs e)
@@ -1183,7 +1244,8 @@ namespace jkhFileSearch
 					}
 					catch(Exception exc)
 					{
-						QuickLog.ErrorException("Exception deleting files", exc);
+						_traceSource.TraceEvent(TraceEventType.Error, 57, "Exception deleting files: " + exc.Message);
+						_traceSource.TraceData(TraceEventType.Error, 57, exc);
 						lvi.ForeColor = Color.Red;
 						if(string.IsNullOrEmpty(statusInfo))
 							statusInfo = "Exception deleting ";
@@ -1320,6 +1382,12 @@ namespace jkhFileSearch
 				richTextBoxPopUp.Hide();
 			else
 				richTextBoxPopUp.Show();
+		}
+
+		private void toolStripButtonAbout_Click(object sender, EventArgs e)
+		{
+			using(FormAbout dlg = new FormAbout())
+				dlg.ShowDialog(this);
 		}
 	}
 }

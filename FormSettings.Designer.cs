@@ -53,6 +53,8 @@ namespace jkhFileSearch
 			this.ShowIcon = false;
 			this.ShowInTaskbar = false;
 			this.Text = "Settings";
+			this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.FormSettings_FormClosing);
+			this.Load += new System.EventHandler(this.FormSettings_Load);
 			this.ResumeLayout(false);
 
 		}

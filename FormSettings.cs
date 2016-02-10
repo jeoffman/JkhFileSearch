@@ -20,11 +20,34 @@ namespace jkhFileSearch
 
 		private void buttonRegistryContext_Click(object sender, EventArgs e)
 		{
-			RegistryKey ourKey = Registry.ClassesRoot.CreateSubKey(@"folder\shell\jkhFileSearch", RegistryKeyPermissionCheck.ReadWriteSubTree);
-			ourKey.SetValue(null, "JKH Search");
+			try
+			{
+				RegistryKey ourKey = Registry.ClassesRoot.CreateSubKey(@"folder\shell\jkhFileSearch", RegistryKeyPermissionCheck.ReadWriteSubTree);
+				ourKey.SetValue(null, "JKH Search");
 
-			ourKey = ourKey.CreateSubKey("command", RegistryKeyPermissionCheck.ReadWriteSubTree);
-			ourKey.SetValue(null, System.Reflection.Assembly.GetExecutingAssembly().Location + " \"%1\"", RegistryValueKind.ExpandString);
+				ourKey = ourKey.CreateSubKey("command", RegistryKeyPermissionCheck.ReadWriteSubTree);
+				ourKey.SetValue(null, System.Reflection.Assembly.GetExecutingAssembly().Location + " \"%1\"", RegistryValueKind.ExpandString);
+			}
+			catch(UnauthorizedAccessException exc)
+			{
+				MessageBox.Show("Try running as administrator\n" + exc.Message);
+			}
+		}
+
+		private void FormSettings_Load(object sender, EventArgs e)
+		{
+			using(CustomSettings settings = new CustomSettings())
+			{
+				settings.RestoreWindowPlacement(this);
+			}
+		}
+
+		private void FormSettings_FormClosing(object sender, FormClosingEventArgs e)
+		{
+			using(CustomSettings settings = new CustomSettings())
+			{
+				settings.SaveWindowPlacement(this);
+			}
 		}
 	}
 }

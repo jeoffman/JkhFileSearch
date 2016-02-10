@@ -1,0 +1,3 @@
+﻿You already know about GitHub - I hope that's where you got this from...
+
+Check out http://www.appveyor.com/ - its pretty darned cool, and free to open source projects (like this!)
