@@ -140,6 +140,8 @@
     <None Include="Resources\LogPopUpGood.png" />
     <Content Include="Readme.txt" />
     <Content Include="Resources\About.png" />
+    <Content Include="Resources\JkhFileSearchScreenshot.png" />
+    <Content Include="Resources\JkhSearchRightClickScreenshot.png" />
     <Content Include="Resources\TextboxHS.png" />
   </ItemGroup>
   <ItemGroup>
