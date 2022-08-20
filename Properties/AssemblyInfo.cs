@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Jeoffman!")]
 [assembly: AssemblyProduct("jkhFileSearch")]
-[assembly: AssemblyCopyright("Copyright © Jeoff Hines 2010-2016")]
+[assembly: AssemblyCopyright("Copyright © Jeoff Hines 2010-2022")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -29,5 +29,5 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("1.0.0.229")]
-[assembly: AssemblyFileVersion("1.0.0.229")]
+[assembly: AssemblyVersion("1.0.1.231")]
+[assembly: AssemblyFileVersion("1.0.1.231")]
