@@ -504,27 +504,31 @@ namespace jkhFileSearch
 									}
 									else
 									{
-										StreamReader sr = File.OpenText(Path.Combine(fi.DirectoryName, fi.Name));
-										string line = sr.ReadLine();
-										while(line != null && !_bwSearcher.CancellationPending)
+										using (var fileStream = new FileStream(Path.Combine(fi.DirectoryName, fi.Name), FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
 										{
-											if(line.IndexOf(sp.containingText, StringComparison.CurrentCultureIgnoreCase) >= 0)
+											using (var sr = new StreamReader(fileStream))
 											{
-												try
+												string line = sr.ReadLine();
+												while (line != null && !_bwSearcher.CancellationPending)
 												{
-													AddFile(sp, fi);
+													if (line.IndexOf(sp.containingText, StringComparison.CurrentCultureIgnoreCase) >= 0)
+													{
+														try
+														{
+															AddFile(sp, fi);
+														}
+														catch (Exception exc)
+														{
+															AddPopUpMessage("Exception adding \"" + fi.FullName + "\":" + exc.Message, Color.DarkRed);
+															Exception copy = exc;
+														}
+														break;
+													}
+													if (!_bwSearcher.CancellationPending)
+														line = sr.ReadLine();
 												}
-												catch(Exception exc)
-												{
-													AddPopUpMessage("Exception adding \"" + fi.FullName + "\":" + exc.Message, Color.DarkRed);
-													Exception copy = exc;
-												}
-												break;
 											}
-											if(!_bwSearcher.CancellationPending)
-												line = sr.ReadLine();
 										}
-										sr.Close();
 									}
 								}
 							}
@@ -1104,43 +1108,46 @@ namespace jkhFileSearch
 			if(!string.IsNullOrEmpty(lookIn))
 			{
 				int lineCount = 0;
-				StreamReader sr;
-				string line;
-				sr = File.OpenText(lookIn);
-				line = sr.ReadLine();
-				while(line != null && !_bwTextSearcher.CancellationPending)
+				using (var fileStream = new FileStream(lookIn, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
 				{
-					lineCount++;
-					if(line.IndexOf(lookFor, StringComparison.CurrentCultureIgnoreCase) >= 0)
+					using (var sr = new StreamReader(fileStream))
 					{
-						if(line.Length > 1024)
-							line = line.Substring(0, 1024);
-						string newLineText = string.Format("{0}. {1}\n", lineCount, line);
+						string line = sr.ReadLine();
+						while (line != null && !_bwTextSearcher.CancellationPending)
+						{
+							lineCount++;
+							if (line.IndexOf(lookFor, StringComparison.CurrentCultureIgnoreCase) >= 0)
+							{
+								if (line.Length > 1024)
+									line = line.Substring(0, 1024);
+								string newLineText = string.Format("{0}. {1}\n", lineCount, line);
 #if USE_BEGIN_INVOKE_JEOFF
-						// trying to fix that deadlock issue with the GUI thread
-						//	canceling this thread (CancelAsync = CancellationPending)
-						//	but this thread waiting for GUI to complete and GUI
-						//	thread waiting for this thread to cancel.
-						// Using "BeginInvoke" in this way did NOT work!
-						//IAsyncResult result = this.BeginInvoke(new AppendLineDelegate(AppendLine), new Object[] { newLineText });
-						//IAsyncResult result = this.BeginInvoke(new MethodInvoker(AppendLine(newLineText)));
-						//while(!result.IsCompleted)
-						//{
-						//	if(_bwTextSearcher.CancellationPending)
-						//		break;
-						//	System.Threading.Thread.Sleep(1);
-						//}
-						//this.EndInvoke(result);
+								// trying to fix that deadlock issue with the GUI thread
+								//	canceling this thread (CancelAsync = CancellationPending)
+								//	but this thread waiting for GUI to complete and GUI
+								//	thread waiting for this thread to cancel.
+								// Using "BeginInvoke" in this way did NOT work!
+								//IAsyncResult result = this.BeginInvoke(new AppendLineDelegate(AppendLine), new Object[] { newLineText });
+								//IAsyncResult result = this.BeginInvoke(new MethodInvoker(AppendLine(newLineText)));
+								//while(!result.IsCompleted)
+								//{
+								//	if(_bwTextSearcher.CancellationPending)
+								//		break;
+								//	System.Threading.Thread.Sleep(1);
+								//}
+								//this.EndInvoke(result);
 #else
-						if(_bwTextSearcher.CancellationPending)
-							break;
-						AppendLine(newLineText);
+								if (_bwTextSearcher.CancellationPending)
+									break;
+								AppendLine(newLineText);
 #endif
+							}
+							if (!_bwTextSearcher.CancellationPending)
+								line = sr.ReadLine();
+						}
+						sr.Close();
 					}
-					if(!_bwTextSearcher.CancellationPending)
-						line = sr.ReadLine();
 				}
-				sr.Close();
 			}
 		}
 
