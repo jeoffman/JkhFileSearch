@@ -1,3 +1,7 @@
+using JkhSettings;
+using ListView_SortManager;
+using Microsoft.VisualBasic.FileIO;
+using shell32;
 using System;   //EventArgs
 using System.Collections.Specialized;
 using System.ComponentModel;    //ThreadPool
@@ -6,33 +10,11 @@ using System.Drawing;   //Color
 using System.Globalization; //CultureInfo
 using System.IO;    //DirectoryInfo
 using System.Runtime.InteropServices;   //Marshall
-using System.Security.Permissions;  //SecurityPermission,PermissionSet
 using System.Text;  //StringBuilder
 using System.Text.RegularExpressions;   //Regex
 using System.Threading;
 using System.Windows.Forms;
-
-using Microsoft.VisualBasic.FileIO; //FileSystem
-using Microsoft.VisualBasic.Devices;
-
-// using ShellDll;
-// using CG.Core;
-
-using shell32;
 using user32;
-using ListView_SortManager;
-using JkhSettings;
-//using jkhIContextMenu;
-
-//using CustomSettingsXML;
-
-
-// [assembly: SecurityPermission(SecurityAction.RequestMinimum, Execution = true)]
-// [assembly: PermissionSet(SecurityAction.RequestOptional, Name = "Nothing")]
-
-// [assembly: IsolatedStorageFilePermission(SecurityAction.RequestMinimum, UserQuota = 1048576)]
-// [assembly: SecurityPermission(SecurityAction.RequestRefuse, UnmanagedCode = true)]
-// [assembly: FileIOPermission(SecurityAction.RequestOptional, Unrestricted = true)]
 
 namespace jkhFileSearch
 {
@@ -865,7 +847,7 @@ namespace jkhFileSearch
 						if(hr != 0)
 							Marshal.ThrowExceptionForHR(hr);
 
-						ContextMenu menu = new ContextMenu();
+                        var menu = new ContextMenu();
 						IContextMenu cm = (IContextMenu)unk;
 						//menu.MenuItems.Add(new MenuItem("TEST"));
 						cm.QueryContextMenu(menu.Handle, 0, uint.MinValue, uint.MaxValue, CMF.CMF_NORMAL);
@@ -1233,7 +1215,7 @@ namespace jkhFileSearch
 						if(lvi.SubItems.Count > 3 && lvi.SubItems[3].Text == "[Dir]")
 						{
 							if(useRecycler)
-								FileSystem.DeleteDirectory(fileToDelete, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);
+                                FileSystem.DeleteDirectory(fileToDelete, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);
 							//MessageBox.Show("Recycle here!");
 							else
 								Directory.Delete(fileToDelete, true);
